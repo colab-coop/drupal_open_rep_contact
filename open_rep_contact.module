@@ -72,20 +72,82 @@ function open_rep_contact_block_configure($delta = '') {
   $orc = open_rep_contact_get_widgets($delta);
   if ($orc) {
     $form = array();
+
     $form['tweets'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Number of nodes you want the block to show'),
-      '#default_value' => variable_get('demo_number', 10),
-      '#size' => 60,
+      '#type' => 'fieldset',
+      '#collabsible' => TRUE,
     );
+//    $form['tweets']['tweet'] = array(
+//      '#type' => 'textarea',
+//      '#title' => t('Actual tweet'),
+//      '#default_value' => variable_get('demo_number', 10),
+//      '#size' => 60,
+//    );
+//    $form['tweets']['tweet_html'] = array(
+//      '#type' => 'textarea',
+//      '#title' => t('Optional tweet HTML.'),
+//      '#default_value' => variable_get('demo_number', 10),
+//      '#size' => 60,
+//    );
+
+    $form['settings'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Parameters for Civic Information API'),
+      '#description' => t('These parameters are passed via the constructor to the ORC Widget. More information on what these mean: !url', array('!url' => l(t('Google Civic Information API Documentation'), "https://developers.google.com/civic-information/docs/v2/representatives/representativeInfoByAddress"))),
+      '#collapsible' => TRUE,
+    );
+
+//    $form['settings']['searchParams'] = array(
+//      'levels' => array(
+//        '#type' => 'checkboxes',
+//        '#title' => 'A list of office levels to filter by.',
+//        '#options' => drupal_map_assoc(array(
+//          'administrativeArea1',
+//          'administrativeArea2',
+//          'country',
+//          'international',
+//          'locality',
+//          'regional',
+//          'special',
+//          'subLocality1',
+//          'subLocality2'
+//        )),
+//      ),
+//      'roles' => array(
+//        '#type' => 'checkboxes',
+//        '#title' => 'A list of office roles to filter by.',
+//        '#options' => drupal_map_assoc(array(
+//          'deputyHeadOfGovernment',
+//          'executiveCouncil',
+//          'governmentOfficer',
+//          'headOfGovernment',
+//          'headOfState',
+//          'highestCourtJudge',
+//          'judge',
+//          'legislatorLowerBody',
+//          'legislatorUpperBody',
+//          'schoolBoard',
+//          'specialPurposeOfficer'
+//        )),
+//      ),
+//    );
     return $form;
   }
 }
 
+/**
+ * Implements hook_block_save
+ */
 function open_rep_contact_block_save($delta = '', $edit = array()) {
-  $orc = open_rep_contact_get_widgets($delta);
-  if ($orc) {
-    //$edit
+  $orc_array = open_rep_contact_get_widgets($delta);
+  if ($orc_array['delta']) {
+    $orc = $orc_array['delta'];
+    foreach ($orc as $propname => $prop) {
+      if (isset($edit[$propname])) {
+        $orc[$propname] = $edit[$propname];
+      }
+    }
+    drupal_write_record($orc);
     cache_clear_all('open_rep_contact', 'cache', TRUE);
   }
 }
