@@ -1,0 +1,231 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function open_rep_contact_menu() {
+  $items = array();
+
+  $items['admin/structure/block/open_rep_contact'] = array(
+    'title' => 'Open Rep Instances',
+    'description' => 'Manage your Open Rep Contact blocks.',
+    'page callback' =>  'drupal_get_form',
+    'page arguments' => array('open_rep_contact_admin_form'),
+    'access callback' => 'user_access',
+    'access arguments' => array('administer blocks'),
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -16,
+    'file' => 'inc/admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_libraries_info().
+ */
+function open_rep_contact_libraries_info() {
+  $libraries = array();
+  $libraries['open_rep_contact'] = array(
+    'name' => 'Open Rep Contact',
+    // TODO update when JS is released
+    'vendor url' => 'https://bitbucket.org/colabcoop-ondemand/sevgen-twitter-widget/',
+    'download url' => 'https://bitbucket.org/colabcoop-ondemand/sevgen-twitter-widget/downloads/open_rep_contact.tgz',
+    'version callback' => 'open_rep_contact_return_true',
+    'files' => array(
+      'js' => array(
+        variable_get('open_rep_contact_library_js_file', 'js/orc.bundle.js'),
+      ),
+      'css' => array(
+        variable_get('open_rep_contact_library_css_file', 'css/orc-styles.css'),
+        // 'open_rep_contact.css',
+      ),
+    ),
+  );
+
+  return $libraries;
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function open_rep_contact_block_info() {
+  $blocks = array();
+  $orcs = open_rep_contact_get_widgets();
+  if ($orcs) {
+    foreach ($orcs as $name => $orc) {
+      $blocks[$name] = array(
+        'info' => $orc['title'],
+      );
+    }
+  }
+  $blocks['ccfed_cleaning_products'] = array(
+    'info' => t('Open Rep Contact - Fed. Cleaning Prod'),
+  );
+  $blocks['ccfed_femcare'] = array(
+    'info' => t('Open Rep Contact - Feminine Care'),
+  );
+  return $blocks;
+}
+
+function open_rep_contact_block_configure($delta = '') {
+  $orc = open_rep_contact_get_widgets($delta);
+  if ($orc) {
+    $form = array();
+    $form['tweets'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Number of nodes you want the block to show'),
+      '#default_value' => variable_get('demo_number', 10),
+      '#size' => 60,
+    );
+    return $form;
+  }
+}
+
+function open_rep_contact_block_save($delta = '', $edit = array()) {
+  $orc = open_rep_contact_get_widgets($delta);
+  if ($orc) {
+    //$edit
+    cache_clear_all('open_rep_contact', 'cache', TRUE);
+  }
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function open_rep_contact_block_view($delta = '') {
+  $module_path = drupal_get_path('module', 'open_rep_contact');
+  if ($delta == 'ccfed_cleaning_products') {
+    $js_settings = array(
+      'target' => '#orc-target',
+      'searchParams' => array(
+        'levels' => array('country'),
+        'roles' => array('legislatorLowerBody', 'legislatorUpperBody'),
+      ),
+      'templateStrings' => array(
+        'headerText' => 'Get involved today. Tweet your representative.',
+        'tweetTexts' => array(
+          '.@{twitter} I have a #righttoknow what’s in the cleaning products I use. Support the Cleaning Products Right to Know Act',
+          '.@{twitter} Tell the cleaning industry to #ComeClean. Support the Cleaning Products Right to Know Act.',
+          '.@{twitter} fight for my #rightotknow what\'s in cleaning products. Support the Cleaning Products Right to Know Act',
+          '.@{twitter} I have a #righttoknow what\'s in the products I bring into my home. Support the Cleaning Products Right to Know Act',
+          '.@{twitter} Help re-introduce the Cleaning Products Right to Know Act. I have a #righttoknow what\'s in the products I use',
+        ),
+        'tweetHTMLs' => array(
+          '.<em>@{twitter}</em> I have a <em>#righttoknow</em> what’s in the cleaning products I use. Support the Cleaning Products Right to Know Act',
+          '.<em>@{twitter}</em> Tell the cleaning industry to <em>#ComeClean</em>. Support the Cleaning Products Right to Know Act.',
+          '.<em>@{twitter}</em> fight for my <em>#rightotknow</em> what\'s in cleaning products. Support the Cleaning Products Right to Know Act',
+          '.<em>@{twitter}</em> I have a <em>#righttoknow</em> what\'s in the products I bring into my home. Support the Cleaning Products Right to Know Act',
+          '.<em>@{twitter}</em> Help re-introduce the Cleaning Products Right to Know Act. I have a <em>#righttoknow</em> what\'s in the products I use',
+        ),
+      ),
+    );
+  }
+
+  else if ($delta == 'ccfed_femcare') {
+    $js_settings = array(
+      'target' => '#orc-target',
+      'searchParams' => array(
+        'levels' => array('country'),
+        'roles' => array('legislatorLowerBody', 'legislatorUpperBody'),
+      ),
+      'templateStrings' => array(
+        'step1IntroText' => 'Start by looking up your local representative.',
+        'headerText' => 'Get involved today. Tweet your representative.',
+        'tweetTexts' => array(
+          ".@{twitter} I have a #righttoknow what’s in the tampons and pads I use. Support H.R. 5916 and my right to know. #ComeClean",
+          ".@{twitter} support H.R. 5916, and my #righttoknow what’s in the tampons and pads I buy. #ComeClean",
+          ".@{twitter} support @RepGraceMeng , H.R. 5916 and my #righttoknow what’s in the pads/tampons I use #ComeClean.",
+          ".@{twitter} Law requires companies to disclose ingredients in foods why not pads and tampons? Support H.R. 5916 #ComeClean",
+          ".@{twitter} Tell the industry to #ComeClean by supporting H.R. 5916 and my #righttoknow what’s in the pads/tampons I use. #ComeClean",
+          ".@{twitter} Tell the industry to #ComeClean by supporting H.R. 5916. I have a #righttoknow what’s in pads + tampons. #ComeClean",
+          ".@{twitter} You have the power to regulate. Act now in support of H.R. 5916 and my #righttoknow what’s in the tampons and pads I buy. ",
+        ),
+        'tweetHTMLs' => array(
+          ".<em>@{twitter}</em> I have a <em>#righttoknow</em> what’s in the tampons and pads I use. Support H.R. 5916 and my right to know. <em>#ComeClean</em>",
+          ".<em>@{twitter}</em> support H.R. 5916, and my <em>#righttoknow</em> what’s in the tampons and pads I buy. <em>#ComeClean</em>",
+          ".<em>@{twitter}</em> support @RepGraceMeng , H.R. 5916 and my <em>#righttoknow</em> what’s in the pads/tampons I use <em>#ComeClean</em>.",
+          ".<em>@{twitter}</em> Law requires companies to disclose ingredients in foods why not pads and tampons? Support H.R. 5916 <em>#ComeClean</em>",
+          ".<em>@{twitter}</em> Tell the industry to <em>#ComeClean</em> by supporting H.R. 5916 and my <em>#righttoknow</em> what’s in the pads/tampons I use. <em>#ComeClean</em>",
+          ".<em>@{twitter}</em> Tell the industry to <em>#ComeClean</em> by supporting H.R. 5916. I have a <em>#righttoknow</em> what’s in pads + tampons. <em>#ComeClean</em>",
+          ".<em>@{twitter}</em> You have the power to regulate. Act now in support of H.R. 5916 and my <em>#righttoknow</em> what’s in the tampons and pads I buy. ",
+        ),
+      )
+    );
+  }
+
+  if (isset($js_settings)) {
+    $js_settings = drupal_array_merge_deep(
+      _open_rep_contact_shared_js_settings(), $js_settings
+    );
+    drupal_add_js(
+      array('open_rep_connect' => $js_settings),
+      array('type' => 'setting'));
+    drupal_add_js("{$module_path}/js/open_rep_contact_drupal.js", array('group' => JS_MODULE));
+    open_rep_contact_add_libraries();
+
+    return array('content' => array('#markup' => '<div id="orc-target"></div>'));
+  }
+}
+
+/**
+ * Add the CSS and JS libraries necessary for the widget.
+ */
+function open_rep_contact_add_libraries() {
+  libraries_load('open_rep_contact');
+}
+
+function open_rep_contact_return_true () {
+  return TRUE;
+}
+
+function _open_rep_contact_shared_js_settings() {
+  $google_api_key = variable_get('open_rep_contact_google_api_key');
+  $library_path = base_path() . libraries_get_path('open_rep_contact');
+  if (!$google_api_key) {
+    drupal_set_message(t('Open Rep Contact Google API key not set'), 'error');
+  }
+  return array(
+    'appRootPath' => $library_path,
+    'twitter' => array(
+      'hashtags' => ('comeclean'),
+    ),
+    'google' => array(
+      'analytics' => array(
+        'id' => 'UA-11111111-1',
+      ),
+      'api' => array(
+        'key' => $google_api_key,
+      ),
+    )
+  );
+}
+
+/**
+ * Retrieve ORC widgets from DB. Optionally limit to one by machine name.
+ *
+ * @param string $widget String representing machine name of widget.
+ *
+ * @return array of orc widget or widgets keyed by machine name.
+ */
+function open_rep_contact_get_widgets($widget = NULL) {
+  $cid = __FUNCTION__ . '_' . (string)$widget;
+  $orcs = &drupal_static($cid);
+  if (!isset($orcs)) {
+    if ($cache = cache_get($cid)) {
+      $orcs = $cache->data;
+    }
+    else {
+      $orcs = array();
+      $query = db_select('open_rep_contact', 'orc')->fields('orc');
+      if ($widget) {
+        $query->condition('name', $widget,'=');
+      }
+      foreach ($query->execute() as $row) {
+        $orcs[$row->name] = (array) $row;
+      }
+      cache_set($cid, $orcs, 'cache');
+    }
+  }
+  return $orcs;
+}

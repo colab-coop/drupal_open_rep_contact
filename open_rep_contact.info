@@ -1,0 +1,5 @@
+name = SVG Twitter Widget
+description = Module for the contact your rep twitter widget.
+package = 'SVG'
+core = 7.x
+dependencies[] = 'libraries'
