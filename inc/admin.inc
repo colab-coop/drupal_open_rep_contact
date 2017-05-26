@@ -90,12 +90,9 @@ function open_rep_contact_block_name_exists($block_name) {
  * @return array Record array with default values for drupal_write_record
  */
 function open_rep_contact_get_db_blob_defaults() {
-  $schema = drupal_get_schema('open_rep_contact');
   $record = array();
-  foreach ($schema['fields'] as $field_name => $field) {
-    if ($field['type'] == 'blob') {
-      $record[$field_name] = array();
-    }
+  foreach (open_rep_contact_get_schema_blob_names() as $field_name) {
+    $record[$field_name] = array();
   }
   return $record;
 }

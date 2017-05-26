@@ -1,5 +1,8 @@
 <?php
 
+define('OPEN_REP_CONTACT_TWEET_TEXT_DEFAULT', '.@{twitter} Tweet Text sample: Income inequality has grown steadily since the 1970\'s. Can you pls fix?');
+define('OPEN_REP_CONTACT_TWEET_HTML_DEFAULT', '.<em>@{twitter}</em> Tweet HTML sample: Income inequality has grown steadily since the 1970\'s. Can you pls fix? <strong>#fixInequality</strong>');
+
 /**
  * Implements hook_menu().
  */
@@ -69,87 +72,161 @@ function open_rep_contact_block_info() {
 }
 
 function open_rep_contact_block_configure($delta = '') {
-  $orc = open_rep_contact_get_widgets($delta);
-  if ($orc) {
+  $orc_array = open_rep_contact_get_widgets($delta);
+  if (isset($orc_array[$delta])) {
+    $orc = $orc_array[$delta];
     $form = array();
-
-    $form['tweets'] = array(
-      '#type' => 'fieldset',
-      '#collabsible' => TRUE,
-    );
-//    $form['tweets']['tweet'] = array(
-//      '#type' => 'textarea',
-//      '#title' => t('Actual tweet'),
-//      '#default_value' => variable_get('demo_number', 10),
-//      '#size' => 60,
-//    );
-//    $form['tweets']['tweet_html'] = array(
-//      '#type' => 'textarea',
-//      '#title' => t('Optional tweet HTML.'),
-//      '#default_value' => variable_get('demo_number', 10),
-//      '#size' => 60,
-//    );
 
     $form['settings'] = array(
       '#type' => 'fieldset',
-      '#title' => t('Parameters for Civic Information API'),
-      '#description' => t('These parameters are passed via the constructor to the ORC Widget. More information on what these mean: !url', array('!url' => l(t('Google Civic Information API Documentation'), "https://developers.google.com/civic-information/docs/v2/representatives/representativeInfoByAddress"))),
-      '#collapsible' => TRUE,
+      '#title' => t('Settings'),
     );
 
-//    $form['settings']['searchParams'] = array(
-//      'levels' => array(
-//        '#type' => 'checkboxes',
-//        '#title' => 'A list of office levels to filter by.',
-//        '#options' => drupal_map_assoc(array(
-//          'administrativeArea1',
-//          'administrativeArea2',
-//          'country',
-//          'international',
-//          'locality',
-//          'regional',
-//          'special',
-//          'subLocality1',
-//          'subLocality2'
-//        )),
-//      ),
-//      'roles' => array(
-//        '#type' => 'checkboxes',
-//        '#title' => 'A list of office roles to filter by.',
-//        '#options' => drupal_map_assoc(array(
-//          'deputyHeadOfGovernment',
-//          'executiveCouncil',
-//          'governmentOfficer',
-//          'headOfGovernment',
-//          'headOfState',
-//          'highestCourtJudge',
-//          'judge',
-//          'legislatorLowerBody',
-//          'legislatorUpperBody',
-//          'schoolBoard',
-//          'specialPurposeOfficer'
-//        )),
-//      ),
-//    );
+    $form['settings']['searchParams'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Search parameters for Civic Information API'),
+      '#description' => t('These parameters are passed via the constructor to the ORC Widget. More information on what these mean: !url', array('!url' => l(t('Google Civic Information API Documentation'), "https://developers.google.com/civic-information/docs/v2/representatives/representativeInfoByAddress"))),
+      '#collapsible' => TRUE,
+
+      'templateStrings' => array(
+        '#type' => 'fieldset',
+        '#title' => t('The template strings to be passed to the API.'),
+
+        'settings__templateStrings__headerText' => array(
+          '#type' => 'textarea',
+          '#title' => 'Header',
+          '#description' => t('Raw HTML or text that will become the title/header'),
+          '#default_value' => isset($orc['settings']['templateStrings']['headerText']) ? $orc['settings']['templateStrings']['headerText'] : '',
+        ),
+      ),
+
+      'settings__searchParams__levels' => array( // b/c this becomes flat array key later.
+        '#type' => 'checkboxes',
+        '#title' => t('A list of office levels to filter by:'),
+        '#default_value' => $orc['settings']['searchParams']['levels'],
+        '#options' => drupal_map_assoc(array(
+          'administrativeArea1',
+          'administrativeArea2',
+          'country',
+          'international',
+          'locality',
+          'regional',
+          'special',
+          'subLocality1',
+          'subLocality2',
+        )),
+      ),
+      'settings__searchParams__roles' => array(
+        '#type' => 'checkboxes',
+        '#title' => t('A list of office roles to filter by:'),
+        '#default_value' => $orc['settings']['searchParams']['roles'],
+        '#options' => drupal_map_assoc(array(
+          'deputyHeadOfGovernment',
+          'executiveCouncil',
+          'governmentOfficer',
+          'headOfGovernment',
+          'headOfState',
+          'highestCourtJudge',
+          'judge',
+          'legislatorLowerBody',
+          'legislatorUpperBody',
+          'schoolBoard',
+          'specialPurposeOfficer'
+        )),
+      ),
+    );
+
+    $form['settings']['templateStrings']['tweets'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Tweets.'),
+      '#collapsible' => TRUE,
+      '#description' => t('Add tweets. To remove tweets, delete text and save form. To add more tweets, save the form and visit the page again. To re-order, cut and paste. (Sorry! No "add another" button on block form pages.)'),
+    );
+    $form_tweets =& $form['settings']['templateStrings']['tweets'];
+
+    $tweet_count = isset($orc['tweets']) ? count($orc['tweets']) : 1;
+
+    for ($i = 1; $i <= $tweet_count + 1; $i++) {
+      $form_tweets[$i] = array(
+        '#type' => 'fieldset',
+      );
+      $tweet_text_default = ($i == 1) ? OPEN_REP_CONTACT_TWEET_TEXT_DEFAULT : ''; // Display sample on first.
+      $form_tweets[$i]["tweets__{$i}__tweetText"] = array(
+        '#type' => 'textarea',
+        '#title' => 'Tweet Text',
+        '#description' => t('Enter a Tweet. %twitter will be replaced with the selected representative\'s twitter handle.', array('%twitter' => '{twitter}')),
+        '#default_value' => isset($orc['tweets'][$i]['tweetText']) ? $orc['tweets'][$i]['tweetText'] : $tweet_text_default,
+      );
+      $tweet_html_default = ($i == 1) ? OPEN_REP_CONTACT_TWEET_HTML_DEFAULT : '';
+      $form_tweets[$i]["tweets__{$i}__tweetHTML"] = array(
+        '#type' => 'textarea',
+        '#title' => 'Tweet HTML',
+        '#description' => t('This optional HTML will be displayed to the user as representing this tweet. You can add, for instance italics or bold around "@repname." %twitter will be replaced with the selected representative\'s twitter handle.', array('%twitter' => '{twitter}')),
+        '#default_value' => isset($orc['tweets'][$i]['tweetHTML']) ? $orc['tweets'][$i]['tweetHTML'] : $tweet_html_default,
+      );
+    }
+
     return $form;
   }
 }
 
 /**
  * Implements hook_block_save
+ *
+ * Passing values separated by a flat key ][ and they become a settings array saved to the
+ * corresponding database field if found.
  */
 function open_rep_contact_block_save($delta = '', $edit = array()) {
   $orc_array = open_rep_contact_get_widgets($delta);
-  if ($orc_array['delta']) {
-    $orc = $orc_array['delta'];
-    foreach ($orc as $propname => $prop) {
-      if (isset($edit[$propname])) {
-        $orc[$propname] = $edit[$propname];
+  if ($orc_array[$delta]) {
+    $orc = $orc_array[$delta];
+    $edit_values = array();
+    foreach ($edit as $key => $val) {
+      if (strpos($key, '__') !== FALSE) {
+        $edit_values = array_replace_recursive($edit_values, open_rep_contact_make_expanded_array_from_flat_key($key, $val));
       }
     }
-    drupal_write_record($orc);
+    $record = drupal_array_merge_deep($orc, $edit_values);
+    foreach ($record['tweets'] as $i => $tweet) {
+      if (empty($tweet['tweetText'])) {
+        unset($record['tweets'][$i]);
+      }
+    }
+    $record['tweets'] = array_values($record['tweets']);
+    drupal_write_record('open_rep_contact', $record, array('id'));
     cache_clear_all('open_rep_contact', 'cache', TRUE);
   }
+}
+
+/**
+ * Takes a $key with $delimeter in it and returns an array with each delimited
+ * part of the string as a child of parent values. At the deepest value, it puts
+ * the value passed in as $val.
+ *
+ * @param $key string
+ * @param $val mixed
+ * @param string $delimeter
+ *
+ * @return array of expanded keys with value as deepest level.
+ */
+function open_rep_contact_make_expanded_array_from_flat_key($key, $val, $delimeter = '__') {
+  $flat_key_array = explode($delimeter, $key);
+  $last_index = count($flat_key_array) -1;
+  $expanded_key_array = array();
+  foreach ($flat_key_array as $index => $key_name) {
+    if ($index == 0) {
+      $expanded_key_array[$key_name] = array();
+      $parent =& $expanded_key_array[$key_name];
+    }
+    else {
+      $parent[$key_name] = array();
+      $parent =& $parent[$key_name];
+    }
+    if ($last_index == $index) {
+      $parent = $val;
+    }
+  }
+  return $expanded_key_array;
 }
 
 /**
@@ -286,8 +363,35 @@ function open_rep_contact_get_widgets($widget = NULL) {
       foreach ($query->execute() as $row) {
         $orcs[$row->name] = (array) $row;
       }
+      $blob_types = open_rep_contact_get_schema_blob_names();
+      foreach($orcs as $orc_name => $orc) {
+        foreach($orc as $field_name => $val) {
+          if (in_array($field_name, $blob_types)) {
+            $orcs[$orc_name][$field_name] = unserialize($val);
+          }
+        }
+      }
       cache_set($cid, $orcs, 'cache');
     }
   }
   return $orcs;
+}
+
+/**
+ * Returns all the field types from the given table schema that are blobs: that
+ * is, need to be unserialized/serialized.
+ *
+ * @param string $table
+ *
+ * @return array
+ */
+function open_rep_contact_get_schema_blob_names($table = 'open_rep_contact'){
+  $blobs = array();
+  $schema = drupal_get_schema('open_rep_contact');
+  foreach ($schema['fields'] as $field_name => $field) {
+    if ($field['type'] == 'blob') {
+      $blobs[] = $field_name;
+    }
+  }
+  return $blobs;
 }
