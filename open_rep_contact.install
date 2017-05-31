@@ -24,7 +24,7 @@ function open_rep_contact_schema() {
         'not null' => TRUE,
         'default' => ''
       ),
-      'tweets' => array(
+      'twitter' => array(
         'description' => 'The configuration data for tweets.',
         'type' => 'blob',
         'not null' => TRUE,
@@ -46,4 +46,23 @@ function open_rep_contact_schema() {
     'primary key' => array('id'),
   );
   return $schema;
+}
+
+
+function open_rep_contact_uninstall() {
+  $module = 'open_rep_contact';
+  global $conf;
+  foreach (array_keys($conf) as $key) {
+    if (strpos($key, $module) === 0) {
+      variable_del($key);
+    }
+  }
+
+  db_delete('block')
+    ->condition('module', $module)
+    ->execute();
+
+  db_delete('block_role')
+    ->condition('module', $module)
+    ->execute();
 }

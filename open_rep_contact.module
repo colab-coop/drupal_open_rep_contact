@@ -146,6 +146,19 @@ function open_rep_contact_block_configure($delta = '') {
         '#default_value' => isset($orc['settings']['templateStrings']['headerText']) ? $orc['settings']['templateStrings']['headerText'] : '',
       ),
 
+    );
+
+    $form['twitter'] = array(
+      '#title' => t('Twitter Settings'),
+      '#type' => 'fieldset',
+      '#collapsible' => TRUE,
+
+      'hashtags' =>  array(
+        '#type' => 'fieldset',
+        '#title' => t('Hashtags'),
+        '#collapsible' => TRUE,
+      ),
+
       'tweets' =>  array(
         '#type' => 'fieldset',
         '#title' => t('Tweets'),
@@ -154,8 +167,16 @@ function open_rep_contact_block_configure($delta = '') {
       ),
     );
 
-    $form_tweets =& $form['settings']['templateStrings']['tweets'];
 
+    for ($i = 1; $i <= variable_get('open_rep_contact_hashtag_count', 3); $i++) {
+      $form['twitter']['hashtags']["twitter__hashtags__{$i}"] = array (
+        '#title' => t('Twitter hashtags'),
+        '#type' => 'textfield',
+        '#description' => 'If set, these hashtags will be added to all the tweets below.',
+      );
+    }
+
+    $form_tweets =& $form['twitter']['tweets'];
     $tweet_count = isset($orc['tweets']) ? count($orc['tweets']) : 1;
 
     for ($i = 1; $i <= $tweet_count + 2; $i++) {
@@ -163,14 +184,14 @@ function open_rep_contact_block_configure($delta = '') {
         '#type' => 'fieldset',
       );
       $tweet_text_default = ($i == 1) ? OPEN_REP_CONTACT_TWEET_TEXT_DEFAULT : ''; // Display sample on first.
-      $form_tweets[$i]["tweets__{$i}__tweetText"] = array(
+      $form_tweets[$i]["twitter__tweets__{$i}__tweetText"] = array(
         '#type' => 'textarea',
         '#title' => 'Tweet Text',
-        '#description' => t('Enter a Tweet. %twitter will be replaced with the selected representative\'s twitter handle.', array('%twitter' => '{twitter}')),
+        '#description' => t('Enter a Tweet. %twitter will be replaced with the selected representative\'s twitter handle. Do not include hashtags, do that above.', array('%twitter' => '{twitter}')),
         '#default_value' => isset($orc['tweets'][$i]['tweetText']) ? $orc['tweets'][$i]['tweetText'] : $tweet_text_default,
       );
       $tweet_html_default = ($i == 1) ? OPEN_REP_CONTACT_TWEET_HTML_DEFAULT : '';
-      $form_tweets[$i]["tweets__{$i}__tweetHTML"] = array(
+      $form_tweets[$i]["twitter__tweets__{$i}__tweetHTML"] = array(
         '#type' => 'textarea',
         '#title' => 'Tweet HTML',
         '#description' => t('This optional HTML will be displayed to the user as representing this tweet. You can add, for instance italics or bold around "@repname." %twitter will be replaced with the selected representative\'s twitter handle.', array('%twitter' => '{twitter}')),
@@ -199,12 +220,12 @@ function open_rep_contact_block_save($delta = '', $edit = array()) {
       }
     }
     $record = drupal_array_merge_deep($orc, $edit_values);
-    foreach ($record['tweets'] as $i => $tweet) {
+    foreach ($record['twitter']['tweets'] as $i => $tweet) {
       if (empty($tweet['tweetText'])) {
-        unset($record['tweets'][$i]);
+        unset($record['twitter']['tweets'][$i]);
       }
     }
-    $record['tweets'] = array_values($record['tweets']);
+    $record['twitter']['tweets'] = array_values($record['twitter']['tweets']);
     drupal_write_record('open_rep_contact', $record, array('id'));
     cache_clear_all('open_rep_contact', 'cache', TRUE);
   }
@@ -218,12 +239,12 @@ function open_rep_contact_block_view($delta = '') {
   if (isset($orc_array[$delta])) {
     $orc = $orc_array[$delta];
     if (empty($orc['settings']['searchParams']['levels'])) {
-      drupal_set_message(t('You have not yet configured up your ORC block. Set it up !url.', array('!url' => l(t('here'), "admin/structure/block/manage/open_rep_contact/{$delta}/configure"))));
+      drupal_set_message(t('You have not yet configured your ORC block. Set it up !url.', array('!url' => l(t('here'), "admin/structure/block/manage/open_rep_contact/{$delta}/configure"))));
       return;
     }
     $tweet_texts = array();
     $tweet_htmls = array();
-    foreach ($orc['tweets'] as $i => $tweet) {
+    foreach ($orc['twitter']['tweets'] as $i => $tweet) {
       $tweet_texts[$i] = $tweet['tweetText'];
       $tweet_htmls[$i] = isset($tweet['tweetHTML']) ? $tweet['tweetHTML'] : '';
     }
@@ -240,13 +261,15 @@ function open_rep_contact_block_view($delta = '') {
         'tweetHTMLs' => $tweet_htmls,
       ),
     );
-
-    // Add JS settings here. Test the app construction. Get the JS lib inline.
+    $hashtags = isset($orc['twitter']['hashtags']) ? array_filter($orc['twitter']['hashtags']) : NULL;
+    if (!empty($hashtags)) {
+      $js_settings['twitter']['hashtags'] = $orc['twitter']['hashtags'];
+    }
 
     $js_settings = drupal_array_merge_deep(_open_rep_contact_shared_js_settings(), $js_settings);
     drupal_add_js(array('open_rep_connect' => $js_settings), array('type' => 'setting'));
     drupal_add_js(drupal_get_path('module', 'open_rep_contact') . '/js/open_rep_contact_drupal.js', array('group' => JS_LIBRARY));
-    open_rep_contact_add_libraries();
+    libraries_load('open_rep_contact');
 
     return array('content' => array('#markup' => '<div id="orc-target"></div>'));
   }
@@ -325,13 +348,6 @@ function open_rep_contact_block_view($delta = '') {
   }
 }
 
-/**
- * Add the CSS and JS libraries necessary for the widget.
- */
-function open_rep_contact_add_libraries() {
-  libraries_load('open_rep_contact');
-}
-
 function open_rep_contact_return_true () {
   return TRUE;
 }
@@ -342,20 +358,20 @@ function _open_rep_contact_shared_js_settings() {
   if (!$google_api_key) {
     drupal_set_message(t('Open Rep Contact Google API key not set. Set it !url', array('!url' => l(t('here'), "admin/structure/block/open_rep_contact/settings"))), 'error');
   }
-  return array(
+  $settings = array(
     'appRootPath' => $library_path,
-    'twitter' => array(
-      'hashtags' => ('comeclean'),
-    ),
     'google' => array(
-      'analytics' => array(
-        'id' => 'UA-11111111-1',
-      ),
       'api' => array(
         'key' => $google_api_key,
       ),
     )
   );
+
+//  'twitter' => array(
+//    'hashtags' => ('comeclean'),
+//  );
+
+  return $settings;
 }
 
 /**
