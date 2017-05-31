@@ -13,11 +13,21 @@ function open_rep_contact_menu() {
     'title' => 'Open Rep Instances',
     'description' => 'Manage your Open Rep Contact blocks.',
     'page callback' =>  'drupal_get_form',
-    'page arguments' => array('open_rep_contact_admin_form'),
+    'page arguments' => array('open_rep_contact_add_block_form'),
     'access callback' => 'user_access',
     'access arguments' => array('administer blocks'),
     'type' => MENU_LOCAL_TASK,
     'weight' => -16,
+    'file' => 'inc/admin.inc',
+  );
+
+  $items['admin/structure/block/open_rep_contact/settings'] = array(
+    'title' => 'Open Rep Connect Settings',
+    'description' => 'Settings for Open Rep Connect',
+    'page callback' =>  'drupal_get_form',
+    'page arguments' => array('open_rep_contact_settings_form'),
+    'access callback' => 'user_access',
+    'access arguments' => array('administer blocks'),
     'file' => 'inc/admin.inc',
   );
 
@@ -84,26 +94,14 @@ function open_rep_contact_block_configure($delta = '') {
 
     $form['settings']['searchParams'] = array(
       '#type' => 'fieldset',
-      '#title' => t('Search parameters for Civic Information API'),
+      '#title' => t('Search parameters for Civic Information API:'),
       '#description' => t('These parameters are passed via the constructor to the ORC Widget. More information on what these mean: !url', array('!url' => l(t('Google Civic Information API Documentation'), "https://developers.google.com/civic-information/docs/v2/representatives/representativeInfoByAddress"))),
       '#collapsible' => TRUE,
-
-      'templateStrings' => array(
-        '#type' => 'fieldset',
-        '#title' => t('The template strings to be passed to the API.'),
-
-        'settings__templateStrings__headerText' => array(
-          '#type' => 'textarea',
-          '#title' => 'Header',
-          '#description' => t('Raw HTML or text that will become the title/header'),
-          '#default_value' => isset($orc['settings']['templateStrings']['headerText']) ? $orc['settings']['templateStrings']['headerText'] : '',
-        ),
-      ),
 
       'settings__searchParams__levels' => array( // b/c this becomes flat array key later.
         '#type' => 'checkboxes',
         '#title' => t('A list of office levels to filter by:'),
-        '#default_value' => $orc['settings']['searchParams']['levels'],
+        '#default_value' => isset($orc['settings']['searchParams']['levels']) ? $orc['settings']['searchParams']['levels'] : array(),
         '#options' => drupal_map_assoc(array(
           'administrativeArea1',
           'administrativeArea2',
@@ -119,7 +117,7 @@ function open_rep_contact_block_configure($delta = '') {
       'settings__searchParams__roles' => array(
         '#type' => 'checkboxes',
         '#title' => t('A list of office roles to filter by:'),
-        '#default_value' => $orc['settings']['searchParams']['roles'],
+        '#default_value' => isset($orc['settings']['searchParams']['roles']) ? $orc['settings']['searchParams']['roles'] : array(),
         '#options' => drupal_map_assoc(array(
           'deputyHeadOfGovernment',
           'executiveCouncil',
@@ -136,17 +134,31 @@ function open_rep_contact_block_configure($delta = '') {
       ),
     );
 
-    $form['settings']['templateStrings']['tweets'] = array(
+    $form['settings']['templateStrings'] = array(
       '#type' => 'fieldset',
-      '#title' => t('Tweets.'),
+      '#title' => t('The template strings to be passed to the constructor:'),
       '#collapsible' => TRUE,
-      '#description' => t('Add tweets. To remove tweets, delete text and save form. To add more tweets, save the form and visit the page again. To re-order, cut and paste. (Sorry! No "add another" button on block form pages.)'),
+
+      'settings__templateStrings__headerText' => array(
+        '#type' => 'textarea',
+        '#title' => 'Header',
+        '#description' => t('Raw HTML or text that will become the title/header'),
+        '#default_value' => isset($orc['settings']['templateStrings']['headerText']) ? $orc['settings']['templateStrings']['headerText'] : '',
+      ),
+
+      'tweets' =>  array(
+        '#type' => 'fieldset',
+        '#title' => t('Tweets'),
+        '#collapsible' => TRUE,
+        '#description' => t('Add tweets. To remove tweets, delete text and save form. To add more tweets, save the form and visit the page again. To re-order, cut and paste. (Sorry! No "add another" button on block form pages.)'),
+      ),
     );
+
     $form_tweets =& $form['settings']['templateStrings']['tweets'];
 
     $tweet_count = isset($orc['tweets']) ? count($orc['tweets']) : 1;
 
-    for ($i = 1; $i <= $tweet_count + 1; $i++) {
+    for ($i = 1; $i <= $tweet_count + 2; $i++) {
       $form_tweets[$i] = array(
         '#type' => 'fieldset',
       );
@@ -178,7 +190,7 @@ function open_rep_contact_block_configure($delta = '') {
  */
 function open_rep_contact_block_save($delta = '', $edit = array()) {
   $orc_array = open_rep_contact_get_widgets($delta);
-  if ($orc_array[$delta]) {
+  if (isset($orc_array[$delta])) {
     $orc = $orc_array[$delta];
     $edit_values = array();
     foreach ($edit as $key => $val) {
@@ -199,40 +211,46 @@ function open_rep_contact_block_save($delta = '', $edit = array()) {
 }
 
 /**
- * Takes a $key with $delimeter in it and returns an array with each delimited
- * part of the string as a child of parent values. At the deepest value, it puts
- * the value passed in as $val.
- *
- * @param $key string
- * @param $val mixed
- * @param string $delimeter
- *
- * @return array of expanded keys with value as deepest level.
- */
-function open_rep_contact_make_expanded_array_from_flat_key($key, $val, $delimeter = '__') {
-  $flat_key_array = explode($delimeter, $key);
-  $last_index = count($flat_key_array) -1;
-  $expanded_key_array = array();
-  foreach ($flat_key_array as $index => $key_name) {
-    if ($index == 0) {
-      $expanded_key_array[$key_name] = array();
-      $parent =& $expanded_key_array[$key_name];
-    }
-    else {
-      $parent[$key_name] = array();
-      $parent =& $parent[$key_name];
-    }
-    if ($last_index == $index) {
-      $parent = $val;
-    }
-  }
-  return $expanded_key_array;
-}
-
-/**
  * Implements hook_block_view().
  */
 function open_rep_contact_block_view($delta = '') {
+  $orc_array = open_rep_contact_get_widgets();
+  if (isset($orc_array[$delta])) {
+    $orc = $orc_array[$delta];
+    if (empty($orc['settings']['searchParams']['levels'])) {
+      drupal_set_message(t('You have not yet configured up your ORC block. Set it up !url.', array('!url' => l(t('here'), "admin/structure/block/manage/open_rep_contact/{$delta}/configure"))));
+      return;
+    }
+    $tweet_texts = array();
+    $tweet_htmls = array();
+    foreach ($orc['tweets'] as $i => $tweet) {
+      $tweet_texts[$i] = $tweet['tweetText'];
+      $tweet_htmls[$i] = isset($tweet['tweetHTML']) ? $tweet['tweetHTML'] : '';
+    }
+    $js_settings = array(
+      'target' => '#orc-target',
+      'searchParams' => array(
+        'levels' => array_values(array_filter($orc['settings']['searchParams']['levels'])),
+        'roles' => array_values(array_filter($orc['settings']['searchParams']['roles'])),
+      ),
+
+      'templateStrings' => array(
+        'headerText' => $orc['settings']['templateStrings']['headerText'],
+        'tweetTexts' => $tweet_texts,
+        'tweetHTMLs' => $tweet_htmls,
+      ),
+    );
+
+    // Add JS settings here. Test the app construction. Get the JS lib inline.
+
+    $js_settings = drupal_array_merge_deep(_open_rep_contact_shared_js_settings(), $js_settings);
+    drupal_add_js(array('open_rep_connect' => $js_settings), array('type' => 'setting'));
+    drupal_add_js(drupal_get_path('module', 'open_rep_contact') . '/js/open_rep_contact_drupal.js', array('group' => JS_LIBRARY));
+    open_rep_contact_add_libraries();
+
+    return array('content' => array('#markup' => '<div id="orc-target"></div>'));
+  }
+
   $module_path = drupal_get_path('module', 'open_rep_contact');
   if ($delta == 'ccfed_cleaning_products') {
     $js_settings = array(
@@ -322,7 +340,7 @@ function _open_rep_contact_shared_js_settings() {
   $google_api_key = variable_get('open_rep_contact_google_api_key');
   $library_path = base_path() . libraries_get_path('open_rep_contact');
   if (!$google_api_key) {
-    drupal_set_message(t('Open Rep Contact Google API key not set'), 'error');
+    drupal_set_message(t('Open Rep Contact Google API key not set. Set it !url', array('!url' => l(t('here'), "admin/structure/block/open_rep_contact/settings"))), 'error');
   }
   return array(
     'appRootPath' => $library_path,
@@ -394,4 +412,35 @@ function open_rep_contact_get_schema_blob_names($table = 'open_rep_contact'){
     }
   }
   return $blobs;
+}
+
+/**
+ * Takes a $key with $delimeter in it and returns an array with each delimited
+ * part of the string as a child of parent values. At the deepest value, it puts
+ * the value passed in as $val.
+ *
+ * @param $key string
+ * @param $val mixed
+ * @param string $delimeter
+ *
+ * @return array of expanded keys with value as deepest level.
+ */
+function open_rep_contact_make_expanded_array_from_flat_key($key, $val, $delimeter = '__') {
+  $flat_key_array = explode($delimeter, $key);
+  $last_index = count($flat_key_array) -1;
+  $expanded_key_array = array();
+  foreach ($flat_key_array as $index => $key_name) {
+    if ($index == 0) {
+      $expanded_key_array[$key_name] = array();
+      $parent =& $expanded_key_array[$key_name];
+    }
+    else {
+      $parent[$key_name] = array();
+      $parent =& $parent[$key_name];
+    }
+    if ($last_index == $index) {
+      $parent = $val;
+    }
+  }
+  return $expanded_key_array;
 }
