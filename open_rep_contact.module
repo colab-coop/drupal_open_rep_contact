@@ -145,12 +145,6 @@ function open_rep_contact_block_configure($delta = '') {
       '#type' => 'fieldset',
       '#collapsible' => TRUE,
 
-      'hashtags' =>  array(
-        '#type' => 'fieldset',
-        '#title' => t('Hashtags'),
-        '#collapsible' => TRUE,
-      ),
-
       'tweets' =>  array(
         '#type' => 'fieldset',
         '#title' => t('Tweets'),
@@ -158,16 +152,6 @@ function open_rep_contact_block_configure($delta = '') {
         '#description' => t('Add tweets. To remove tweets, delete text and save form. To add more tweets, save the form and visit the page again. To re-order, cut and paste. (Sorry! No "add another" button on block form pages.)'),
       ),
     );
-
-
-    for ($i = 0; $i <= variable_get('open_rep_contact_hashtag_count', 3) - 1; $i++) {
-      $form['twitter']['hashtags']["twitter__hashtags__{$i}"] = array (
-        '#title' => t('Twitter hashtag'),
-        '#type' => 'textfield',
-        '#description' => 'If set, these hashtags will be added to all the tweets below.',
-        '#default_value' => isset($orc['twitter']['hashtags'][$i]) ? $orc['twitter']['hashtags'][$i] : '',
-      );
-    }
 
     $form_tweets =& $form['twitter']['tweets'];
     $tweet_count = isset($orc['tweets']) ? count($orc['tweets']) : 1;
@@ -180,7 +164,7 @@ function open_rep_contact_block_configure($delta = '') {
       $form_tweets[$i]["twitter__tweets__{$i}__tweetText"] = array(
         '#type' => 'textarea',
         '#title' => 'Tweet Text',
-        '#description' => t('Enter a Tweet. %twitter will be replaced with the selected representative\'s twitter handle. Do not include hashtags, do that above.', array('%twitter' => '{twitter}')),
+        '#description' => t('Enter a Tweet. %twitter will be replaced with the selected representative\'s twitter handle.', array('%twitter' => '{twitter}')),
         '#default_value' => isset($orc['twitter']['tweets'][$i]['tweetText']) ? $orc['twitter']['tweets'][$i]['tweetText'] : $tweet_text_default,
       );
       $tweet_html_default = ($i == 1) ? OPEN_REP_CONTACT_TWEET_HTML_DEFAULT : '';
@@ -218,7 +202,6 @@ function open_rep_contact_block_save($delta = '', $edit = array()) {
         unset($record['twitter']['tweets'][$i]);
       }
     }
-    $record['twitter']['hashtags'] = array_values(array_filter($record['twitter']['hashtags']));
     $record['twitter']['tweets'] = array_values($record['twitter']['tweets']);
     drupal_write_record('open_rep_contact', $record, array('id'));
     cache_clear_all('open_rep_contact', 'cache', TRUE);
@@ -282,10 +265,7 @@ function _open_rep_contact_get_js_settings_array($orc) {
       'tweetHTMLs' => $tweet_htmls,
     ),
   );
-  $hashtags = isset($orc['twitter']['hashtags']) ? array_filter($orc['twitter']['hashtags']) : NULL;
-  if (!empty($hashtags)) {
-    $js_settings['twitter']['hashtags'] = $orc['twitter']['hashtags'];
-  }
+
   return $js_settings;
 }
 
