@@ -2,29 +2,30 @@
 
 This module integrates the Open Rep Contact JS library with Drupal.
 
+## How it Works
+
+This module allows you to place blocks that become "tweet to your representative" widgets on drupal pages.
+
+It connects with the Google Civic Information API and allows some parameters to be configured.
+
+For instance, you could set up an action contacting state legislature members, or you could use it
+to contact senators. You could set up your own custom tweets and customize it heavily.
+
+Multiple blocks can be configured, but two blocks cannot appear on the same page.
+
 ## Installation
 
 Install the [Open Rep Contact library][orc] into a library directory named `open_rep_contact`
 (e.g. `sites/all/libraries/open_rep_connect`) in one of two ways:
 
-1. Download the `open_rep_contact.tgz` tarball of build files and rename the `dist` directory to the library directory.
-2. Clone the project repo, install and build it, then copy the contents of the `dist` directory to the library directory.
-3. Set the `open_rep_contact_google_api_key` settings via `drush vset` from the command line, or `$conf = ...` in your settings file.
+1. Download or clone the [Open Rep Contact JS App](https://github.com/colab-coop/open-rep-contact.js) and move/rename the `dist` directory to exist at `libraries/open_rep_connect`. Once complete, you will have three directories at `libraries/open_rep_connect`: `css`, `js`, and `img`.
+3. Add a block and the google API key at Structure -> Blocks -> Open Rep Connect Instances (tab)
+4. Configure the block you set up using the "edit" link
+5. Add your block to the page.
 
-A useful command for option 2 is `rsync -arv  /path/to/sevgen-twitter-widget/dist/ sites/all/libraries/open_rep_connect`
-(be sure to leave the trailing slashes intact!)
+Open Rep Contact has minimal dependencies, jQuery is not required.
 
-Open Rep Contact is written to have minimal dependencies, so not even a specific jQuery version is required.
-
-This module creates a block that can be used to embed the app. The easiest way to see it on a page (on
-SeventhGeneration.com) is to create a page with input filter "SVG Text Replace" and content
-
-    <!--svg_text_filter--{open_rep_contact}{open_rep_contact}-->
-
-[orc]: https://bitbucket.org/colabcoop-ondemand/sevgen-twitter-widget/
-
-## Customizing
-
+## For Developers
 
 To change the JS or CSS files included with the open_rep_contact library, you can set the Drupal variables
 `open_rep_contact_library_js_file` or `open_rep_contact_library_css_file`. This can be especially useful if you want
@@ -35,10 +36,6 @@ files to be picked up. You can easily include alternate options using `$conf[var
 settings.php.
 
 Example:
-ln -s ~/www/sevgen-twitter-widget/dist  docroot/sites/all/libraries/open_rep_contact_dev
+ln -s ~/www/my_app_location/dist  docroot/sites/all/libraries/open_rep_contact_dev
 drush vset open_rep_contact_library_js_file ../open_rep_contact_dev/js/orc.bundle.js
 drush vset open_rep_contact_library_css_file ../open_rep_contact_dev/css/orc-styles.css
-
-Currently, you need to create Drupal behaviors to actually embed the app into a page. This is something we certainly
-plan to change, but this module is currently mainly intended for developers. See the js files included with the module
-for a template of how to set it up.

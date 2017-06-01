@@ -1,16 +1,33 @@
 <?php
 
+define('OPEN_REP_CONTACT_TWEET_TEXT_DEFAULT', '.@{twitter} Tweet Text sample: Income inequality has grown steadily since the 1970\'s. Can you pls fix?');
+define('OPEN_REP_CONTACT_TWEET_HTML_DEFAULT', '.<em>@{twitter}</em> Tweet HTML sample: Income inequality has grown steadily since the 1970\'s. Can you pls fix? <strong>#fixInequality</strong>');
+
 /**
  * Implements hook_menu().
  */
 function open_rep_contact_menu() {
   $items = array();
-  $items['admin/config/administration/open_rep_contact'] = array(
-    'title' => 'Administer Open Rep Contact Widget',
-    'description' => 'Adjust widget settings.',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('open_rep_contact_admin_form'),
-    'access arguments' => array('administer site configuration'),
+
+  $items['admin/structure/block/open_rep_contact'] = array(
+    'title' => 'Open Rep Instances',
+    'description' => 'Manage your Open Rep Contact blocks.',
+    'page callback' =>  'drupal_get_form',
+    'page arguments' => array('open_rep_contact_add_block_form'),
+    'access callback' => 'user_access',
+    'access arguments' => array('administer blocks'),
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -16,
+    'file' => 'inc/admin.inc',
+  );
+
+  $items['admin/structure/block/open_rep_contact/settings'] = array(
+    'title' => 'Open Rep Connect Settings',
+    'description' => 'Settings for Open Rep Connect',
+    'page callback' =>  'drupal_get_form',
+    'page arguments' => array('open_rep_contact_settings_form'),
+    'access callback' => 'user_access',
+    'access arguments' => array('administer blocks'),
     'file' => 'inc/admin.inc',
   );
 
@@ -22,6 +39,9 @@ function open_rep_contact_menu() {
  */
 function open_rep_contact_libraries_info() {
   $libraries = array();
+  // For empty variable strings.
+  $js_path = empty(variable_get('open_rep_contact_library_js_file', '')) ? 'js/orc.bundle.js' : variable_get('open_rep_contact_library_js_file', '');
+  $css_path = empty(variable_get('open_rep_contact_library_css_file', '')) ? 'css/orc-styles.css' : variable_get('open_rep_contact_library_css_file', '');
   $libraries['open_rep_contact'] = array(
     'name' => 'Open Rep Contact',
     // TODO update when JS is released
@@ -29,13 +49,8 @@ function open_rep_contact_libraries_info() {
     'download url' => 'https://bitbucket.org/colabcoop-ondemand/sevgen-twitter-widget/downloads/open_rep_contact.tgz',
     'version callback' => 'open_rep_contact_return_true',
     'files' => array(
-      'js' => array(
-        variable_get('open_rep_contact_library_js_file', 'js/orc.bundle.js'),
-      ),
-      'css' => array(
-        variable_get('open_rep_contact_library_css_file', 'css/orc-styles.css'),
-        // 'open_rep_contact.css',
-      ),
+      'js' => array($js_path),
+      'css' => array($css_path),
     ),
   );
 
@@ -47,122 +62,316 @@ function open_rep_contact_libraries_info() {
  */
 function open_rep_contact_block_info() {
   $blocks = array();
-  $blocks['ccfed_cleaning_products'] = array(
-    'info' => t('Open Rep Contact - Fed. Cleaning Prod'),
-  );
-  $blocks['ccfed_femcare'] = array(
-    'info' => t('Open Rep Contact - Feminine Care'),
-  );
+  $orcs = open_rep_contact_get_widgets();
+  if ($orcs) {
+    foreach ($orcs as $name => $orc) {
+      $blocks[$name] = array(
+        'info' => $orc['title'],
+      );
+    }
+  }
   return $blocks;
+}
+
+function open_rep_contact_block_configure($delta = '') {
+  $orc_array = open_rep_contact_get_widgets($delta);
+  if (isset($orc_array[$delta])) {
+    $orc = $orc_array[$delta];
+    $form = array();
+
+    $form['settings'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Settings'),
+    );
+
+    $form['settings']['searchParams'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Search parameters for Civic Information API:'),
+      '#description' => t('These parameters are passed via the constructor to the ORC Widget. More information on what these mean: !url', array('!url' => l(t('Google Civic Information API Documentation'), "https://developers.google.com/civic-information/docs/v2/representatives/representativeInfoByAddress"))),
+      '#collapsible' => TRUE,
+
+      'settings__searchParams__levels' => array( // b/c this becomes flat array key later.
+        '#type' => 'checkboxes',
+        '#title' => t('A list of office levels to filter by:'),
+        '#default_value' => isset($orc['settings']['searchParams']['levels']) ? $orc['settings']['searchParams']['levels'] : array(),
+        '#options' => drupal_map_assoc(array(
+          'administrativeArea1',
+          'administrativeArea2',
+          'country',
+          'international',
+          'locality',
+          'regional',
+          'special',
+          'subLocality1',
+          'subLocality2',
+        )),
+      ),
+      'settings__searchParams__roles' => array(
+        '#type' => 'checkboxes',
+        '#title' => t('A list of office roles to filter by:'),
+        '#default_value' => isset($orc['settings']['searchParams']['roles']) ? $orc['settings']['searchParams']['roles'] : array(),
+        '#options' => drupal_map_assoc(array(
+          'deputyHeadOfGovernment',
+          'executiveCouncil',
+          'governmentOfficer',
+          'headOfGovernment',
+          'headOfState',
+          'highestCourtJudge',
+          'judge',
+          'legislatorLowerBody',
+          'legislatorUpperBody',
+          'schoolBoard',
+          'specialPurposeOfficer'
+        )),
+      ),
+    );
+
+    $form['settings']['templateStrings'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('The template strings to be passed to the constructor:'),
+      '#collapsible' => TRUE,
+
+      'settings__templateStrings__headerText' => array(
+        '#type' => 'textarea',
+        '#title' => 'Header',
+        '#description' => t('Raw HTML or text that will become the title/header'),
+        '#default_value' => isset($orc['settings']['templateStrings']['headerText']) ? $orc['settings']['templateStrings']['headerText'] : '',
+      ),
+
+    );
+
+    $form['twitter'] = array(
+      '#title' => t('Twitter Settings'),
+      '#type' => 'fieldset',
+      '#collapsible' => TRUE,
+
+      'hashtags' =>  array(
+        '#type' => 'fieldset',
+        '#title' => t('Hashtags'),
+        '#collapsible' => TRUE,
+      ),
+
+      'tweets' =>  array(
+        '#type' => 'fieldset',
+        '#title' => t('Tweets'),
+        '#collapsible' => TRUE,
+        '#description' => t('Add tweets. To remove tweets, delete text and save form. To add more tweets, save the form and visit the page again. To re-order, cut and paste. (Sorry! No "add another" button on block form pages.)'),
+      ),
+    );
+
+
+    for ($i = 0; $i <= variable_get('open_rep_contact_hashtag_count', 3) - 1; $i++) {
+      $form['twitter']['hashtags']["twitter__hashtags__{$i}"] = array (
+        '#title' => t('Twitter hashtag'),
+        '#type' => 'textfield',
+        '#description' => 'If set, these hashtags will be added to all the tweets below.',
+        '#default_value' => isset($orc['twitter']['hashtags'][$i]) ? $orc['twitter']['hashtags'][$i] : '',
+      );
+    }
+
+    $form_tweets =& $form['twitter']['tweets'];
+    $tweet_count = isset($orc['tweets']) ? count($orc['tweets']) : 1;
+
+    for ($i = 1; $i <= $tweet_count + 2; $i++) {
+      $form_tweets[$i] = array(
+        '#type' => 'fieldset',
+      );
+      $tweet_text_default = ($i == 1) ? OPEN_REP_CONTACT_TWEET_TEXT_DEFAULT : ''; // Display sample on first.
+      $form_tweets[$i]["twitter__tweets__{$i}__tweetText"] = array(
+        '#type' => 'textarea',
+        '#title' => 'Tweet Text',
+        '#description' => t('Enter a Tweet. %twitter will be replaced with the selected representative\'s twitter handle. Do not include hashtags, do that above.', array('%twitter' => '{twitter}')),
+        '#default_value' => isset($orc['twitter']['tweets'][$i]['tweetText']) ? $orc['twitter']['tweets'][$i]['tweetText'] : $tweet_text_default,
+      );
+      $tweet_html_default = ($i == 1) ? OPEN_REP_CONTACT_TWEET_HTML_DEFAULT : '';
+      $form_tweets[$i]["twitter__tweets__{$i}__tweetHTML"] = array(
+        '#type' => 'textarea',
+        '#title' => 'Tweet HTML',
+        '#description' => t('This optional HTML will be displayed to the user as representing this tweet. You can add, for instance italics or bold around "@repname." %twitter will be replaced with the selected representative\'s twitter handle.', array('%twitter' => '{twitter}')),
+        '#default_value' => isset($orc['twitter']['tweets'][$i]['tweetHTML']) ? $orc['twitter']['tweets'][$i]['tweetHTML'] : $tweet_html_default,
+      );
+    }
+
+    return $form;
+  }
+}
+
+/**
+ * Implements hook_block_save
+ *
+ * Passing values separated by a flat key ][ and they become a settings array saved to the
+ * corresponding database field if found.
+ */
+function open_rep_contact_block_save($delta = '', $edit = array()) {
+  $orc_array = open_rep_contact_get_widgets($delta);
+  if (isset($orc_array[$delta])) {
+    $orc = $orc_array[$delta];
+    $edit_values = array();
+    foreach ($edit as $key => $val) {
+      if (strpos($key, '__') !== FALSE) {
+        $edit_values = array_replace_recursive($edit_values, open_rep_contact_make_expanded_array_from_flat_key($key, $val));
+      }
+    }
+    $record = drupal_array_merge_deep($orc, $edit_values);
+    foreach ($record['twitter']['tweets'] as $i => $tweet) {
+      if (empty($tweet['tweetText'])) {
+        unset($record['twitter']['tweets'][$i]);
+      }
+    }
+    $record['twitter']['hashtags'] = array_values(array_filter($record['twitter']['hashtags']));
+    $record['twitter']['tweets'] = array_values($record['twitter']['tweets']);
+    drupal_write_record('open_rep_contact', $record, array('id'));
+    cache_clear_all('open_rep_contact', 'cache', TRUE);
+  }
 }
 
 /**
  * Implements hook_block_view().
  */
 function open_rep_contact_block_view($delta = '') {
-  $module_path = drupal_get_path('module', 'open_rep_contact');
-  if ($delta == 'ccfed_cleaning_products') {
-    $js_settings = array(
-      'target' => '#orc-target',
-      'searchParams' => array(
-        'levels' => array('country'),
-        'roles' => array('legislatorLowerBody', 'legislatorUpperBody'),
-      ),
-      'templateStrings' => array(
-        'headerText' => 'Get involved today. Tweet your representative.',
-        'tweetTexts' => array(
-          '.@{twitter} I have a #righttoknow what’s in the cleaning products I use. Support the Cleaning Products Right to Know Act',
-          '.@{twitter} Tell the cleaning industry to #ComeClean. Support the Cleaning Products Right to Know Act.',
-          '.@{twitter} fight for my #rightotknow what\'s in cleaning products. Support the Cleaning Products Right to Know Act',
-          '.@{twitter} I have a #righttoknow what\'s in the products I bring into my home. Support the Cleaning Products Right to Know Act',
-          '.@{twitter} Help re-introduce the Cleaning Products Right to Know Act. I have a #righttoknow what\'s in the products I use',
-        ),
-        'tweetHTMLs' => array(
-          '.<em>@{twitter}</em> I have a <em>#righttoknow</em> what’s in the cleaning products I use. Support the Cleaning Products Right to Know Act',
-          '.<em>@{twitter}</em> Tell the cleaning industry to <em>#ComeClean</em>. Support the Cleaning Products Right to Know Act.',
-          '.<em>@{twitter}</em> fight for my <em>#rightotknow</em> what\'s in cleaning products. Support the Cleaning Products Right to Know Act',
-          '.<em>@{twitter}</em> I have a <em>#righttoknow</em> what\'s in the products I bring into my home. Support the Cleaning Products Right to Know Act',
-          '.<em>@{twitter}</em> Help re-introduce the Cleaning Products Right to Know Act. I have a <em>#righttoknow</em> what\'s in the products I use',
-        ),
-      ),
-    );
-  }
-
-  else if ($delta == 'ccfed_femcare') {
-    $js_settings = array(
-      'target' => '#orc-target',
-      'searchParams' => array(
-        'levels' => array('country'),
-        'roles' => array('legislatorLowerBody', 'legislatorUpperBody'),
-      ),
-      'templateStrings' => array(
-        'step1IntroText' => 'Start by looking up your local representative.',
-        'headerText' => 'Get involved today. Tweet your representative.',
-        'tweetTexts' => array(
-          ".@{twitter} I have a #righttoknow what’s in the tampons and pads I use. Support H.R. 5916 and my right to know. #ComeClean",
-          ".@{twitter} support H.R. 5916, and my #righttoknow what’s in the tampons and pads I buy. #ComeClean",
-          ".@{twitter} support @RepGraceMeng , H.R. 5916 and my #righttoknow what’s in the pads/tampons I use #ComeClean.",
-          ".@{twitter} Law requires companies to disclose ingredients in foods why not pads and tampons? Support H.R. 5916 #ComeClean",
-          ".@{twitter} Tell the industry to #ComeClean by supporting H.R. 5916 and my #righttoknow what’s in the pads/tampons I use. #ComeClean",
-          ".@{twitter} Tell the industry to #ComeClean by supporting H.R. 5916. I have a #righttoknow what’s in pads + tampons. #ComeClean",
-          ".@{twitter} You have the power to regulate. Act now in support of H.R. 5916 and my #righttoknow what’s in the tampons and pads I buy. ",
-        ),
-        'tweetHTMLs' => array(
-          ".<em>@{twitter}</em> I have a <em>#righttoknow</em> what’s in the tampons and pads I use. Support H.R. 5916 and my right to know. <em>#ComeClean</em>",
-          ".<em>@{twitter}</em> support H.R. 5916, and my <em>#righttoknow</em> what’s in the tampons and pads I buy. <em>#ComeClean</em>",
-          ".<em>@{twitter}</em> support @RepGraceMeng , H.R. 5916 and my <em>#righttoknow</em> what’s in the pads/tampons I use <em>#ComeClean</em>.",
-          ".<em>@{twitter}</em> Law requires companies to disclose ingredients in foods why not pads and tampons? Support H.R. 5916 <em>#ComeClean</em>",
-          ".<em>@{twitter}</em> Tell the industry to <em>#ComeClean</em> by supporting H.R. 5916 and my <em>#righttoknow</em> what’s in the pads/tampons I use. <em>#ComeClean</em>",
-          ".<em>@{twitter}</em> Tell the industry to <em>#ComeClean</em> by supporting H.R. 5916. I have a <em>#righttoknow</em> what’s in pads + tampons. <em>#ComeClean</em>",
-          ".<em>@{twitter}</em> You have the power to regulate. Act now in support of H.R. 5916 and my <em>#righttoknow</em> what’s in the tampons and pads I buy. ",
-        ),
-      )
-    );
-  }
-
-  if (isset($js_settings)) {
-    $js_settings = drupal_array_merge_deep(
-      _open_rep_contact_shared_js_settings(), $js_settings
-    );
-    drupal_add_js(
-      array('open_rep_connect' => $js_settings),
-      array('type' => 'setting'));
-    drupal_add_js("{$module_path}/js/open_rep_contact_drupal.js", array('group' => JS_MODULE));
-    open_rep_contact_add_libraries();
-
+  $orc_array = open_rep_contact_get_widgets();
+  if (isset($orc_array[$delta])) {
+    $orc = $orc_array[$delta];
+    if (empty($orc['settings']['searchParams']['levels'])) {
+      drupal_set_message(t('You have not yet configured your ORC block. Set it up !url.', array('!url' => l(t('here'), "admin/structure/block/manage/open_rep_contact/{$delta}/configure"))));
+      return;
+    }
+    drupal_add_js(array('open_rep_connect' => _open_rep_contact_get_js_settings_array($orc)), array('type' => 'setting'));
+    drupal_add_js(drupal_get_path('module', 'open_rep_contact') . '/js/open_rep_contact_drupal.js', array('group' => JS_LIBRARY));
+    libraries_load('open_rep_contact');
     return array('content' => array('#markup' => '<div id="orc-target"></div>'));
   }
-}
-
-/**
- * Add the CSS and JS libraries necessary for the widget.
- */
-function open_rep_contact_add_libraries() {
-  libraries_load('open_rep_contact');
 }
 
 function open_rep_contact_return_true () {
   return TRUE;
 }
 
-function _open_rep_contact_shared_js_settings() {
-  $google_api_key = variable_get('open_rep_contact_google_api_key');
-  $library_path = base_path() . libraries_get_path('open_rep_contact');
-  if (!$google_api_key) {
-    drupal_set_message(t('Open Rep Contact Google API key not set'), 'error');
+/**
+ * @param $orc array of ORC block settings from DB.
+ *
+ * @return array Settings for passing to drupal_add_js
+ */
+function _open_rep_contact_get_js_settings_array($orc) {
+  if (!($google_api_key = variable_get('open_rep_contact_google_api_key'))) {
+    drupal_set_message(t('Open Rep Contact Google API key not set. Set it !url', array('!url' => l(t('here'), "admin/structure/block/open_rep_contact/settings"))), 'error');
+    return array();
   }
-  return array(
-    'appRootPath' => $library_path,
-    'twitter' => array(
-      'hashtags' => ('comeclean'),
-    ),
+  $tweet_texts = array();
+  $tweet_htmls = array();
+  foreach ($orc['twitter']['tweets'] as $i => $tweet) {
+    $tweet_texts[$i] = $tweet['tweetText'];
+    $tweet_htmls[$i] = isset($tweet['tweetHTML']) ? $tweet['tweetHTML'] : '';
+  }
+  $js_settings = array(
+    'appRootPath' => base_path() . libraries_get_path('open_rep_contact'),
     'google' => array(
-      'analytics' => array(
-        'id' => 'UA-11111111-1',
-      ),
       'api' => array(
         'key' => $google_api_key,
       ),
-    )
+    ),
+    'target' => '#orc-target',
+    'searchParams' => array(
+      'levels' => array_values(array_filter($orc['settings']['searchParams']['levels'])),
+      'roles' => array_values(array_filter($orc['settings']['searchParams']['roles'])),
+    ),
+
+    'templateStrings' => array(
+      'headerText' => $orc['settings']['templateStrings']['headerText'],
+      'tweetTexts' => $tweet_texts,
+      'tweetHTMLs' => $tweet_htmls,
+    ),
   );
+  $hashtags = isset($orc['twitter']['hashtags']) ? array_filter($orc['twitter']['hashtags']) : NULL;
+  if (!empty($hashtags)) {
+    $js_settings['twitter']['hashtags'] = $orc['twitter']['hashtags'];
+  }
+  return $js_settings;
+}
+
+/**
+ * Retrieve ORC widgets from DB. Optionally limit to one by machine name.
+ *
+ * @param string $widget String representing machine name of widget.
+ *
+ * @return array of orc widget or widgets keyed by machine name.
+ */
+function open_rep_contact_get_widgets($widget = NULL) {
+  $cid = __FUNCTION__ . '_' . (string)$widget;
+  $orcs = &drupal_static($cid);
+  if (!isset($orcs)) {
+    if ($cache = cache_get($cid)) {
+      $orcs = $cache->data;
+    }
+    else {
+      $orcs = array();
+      $query = db_select('open_rep_contact', 'orc')->fields('orc');
+      if ($widget) {
+        $query->condition('name', $widget,'=');
+      }
+      foreach ($query->execute() as $row) {
+        $orcs[$row->name] = (array) $row;
+      }
+      $blob_types = open_rep_contact_get_schema_blob_names();
+      foreach($orcs as $orc_name => $orc) {
+        foreach($orc as $field_name => $val) {
+          if (in_array($field_name, $blob_types)) {
+            $orcs[$orc_name][$field_name] = unserialize($val);
+          }
+        }
+      }
+      cache_set($cid, $orcs, 'cache');
+    }
+  }
+  return $orcs;
+}
+
+/**
+ * Returns all the field types from the given table schema that are blobs: that
+ * is, need to be unserialized/serialized.
+ *
+ * @param string $table
+ *
+ * @return array
+ */
+function open_rep_contact_get_schema_blob_names($table = 'open_rep_contact'){
+  $blobs = array();
+  $schema = drupal_get_schema('open_rep_contact');
+  foreach ($schema['fields'] as $field_name => $field) {
+    if ($field['type'] == 'blob') {
+      $blobs[] = $field_name;
+    }
+  }
+  return $blobs;
+}
+
+/**
+ * Takes a $key with $delimeter in it and returns an array with each delimited
+ * part of the string as a child of parent values. At the deepest value, it puts
+ * the value passed in as $val.
+ *
+ * @param $key string
+ * @param $val mixed
+ * @param string $delimeter
+ *
+ * @return array of expanded keys with value as deepest level.
+ */
+function open_rep_contact_make_expanded_array_from_flat_key($key, $val, $delimeter = '__') {
+  $flat_key_array = explode($delimeter, $key);
+  $last_index = count($flat_key_array) -1;
+  $expanded_key_array = array();
+  foreach ($flat_key_array as $index => $key_name) {
+    if ($index == 0) {
+      $expanded_key_array[$key_name] = array();
+      $parent =& $expanded_key_array[$key_name];
+    }
+    else {
+      $parent[$key_name] = array();
+      $parent =& $parent[$key_name];
+    }
+    if ($last_index == $index) {
+      $parent = $val;
+    }
+  }
+  return $expanded_key_array;
 }

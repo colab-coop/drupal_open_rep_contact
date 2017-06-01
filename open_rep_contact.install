@@ -1,0 +1,68 @@
+<?php
+
+function open_rep_contact_schema() {
+  $schema = array();
+  $schema['open_rep_contact'] = array(
+    'description' => 'The settings table for Open Rep Connect.',
+    'fields' => array(
+      'id' => array(
+        'description' => 'The numeric ID for a ORC block.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE
+      ),
+      'name' => array(
+        'description' => 'The unique machine name for an ORC block.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'description' => 'The title of this ORC block, always treated as non-markup plain text.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => ''
+      ),
+      'twitter' => array(
+        'description' => 'The configuration data for tweets.',
+        'type' => 'blob',
+        'not null' => TRUE,
+        'size' => 'big',
+        'serialize' => TRUE,
+      ),
+      'settings' => array(
+        'description' => 'The configuration data for the ORC widget.',
+        'type' => 'blob',
+        'not null' => TRUE,
+        'size' => 'big',
+        'serialize' => TRUE,
+        ),
+    ),
+    'unique keys' => array(
+      'id_name' => array('id', 'name'),
+      'name'     => array('name')
+    ),
+    'primary key' => array('id'),
+  );
+  return $schema;
+}
+
+
+function open_rep_contact_uninstall() {
+  $module = 'open_rep_contact';
+  global $conf;
+  foreach (array_keys($conf) as $key) {
+    if (strpos($key, $module) === 0) {
+      variable_del($key);
+    }
+  }
+
+  db_delete('block')
+    ->condition('module', $module)
+    ->execute();
+
+  db_delete('block_role')
+    ->condition('module', $module)
+    ->execute();
+}
