@@ -87,12 +87,17 @@ function open_rep_contact_block_configure($delta = '') {
     $form['settings']['searchParams'] = array(
       '#type' => 'fieldset',
       '#title' => t('Search parameters for Civic Information API:'),
-      '#description' => t('These parameters are passed via the constructor to the ORC Widget. More information on what these mean: !url', array('!url' => l(t('Google Civic Information API Documentation'), "https://developers.google.com/civic-information/docs/v2/representatives/representativeInfoByAddress"))),
+      '#description' => t('These are the ways we determine which governmental representatives to pull, based on an international standardized nomenclature. Documentation on the function arguments !docurl. Human-friendly information on what these settings mean !humanurl. (These are the ORC JS constructor args.)',
+        array(
+          '!docurl' => l(t('here'), "https://developers.google.com/civic-information/docs/v2/representatives/representativeInfoByAddress"),
+          '!humanurl' => l(t('here'), "https://developers.google.com/civic-information/docs/v2/representatives")
+        )
+      ),
       '#collapsible' => TRUE,
 
       'settings__searchParams__levels' => array( // b/c this becomes flat array key later.
         '#type' => 'checkboxes',
-        '#title' => t('A list of office levels to filter by:'),
+        '#title' => t('A list of geographical office levels to filter by.'),
         '#default_value' => isset($orc['settings']['searchParams']['levels']) ? $orc['settings']['searchParams']['levels'] : array(),
         '#options' => drupal_map_assoc(array(
           'administrativeArea1',
@@ -108,7 +113,8 @@ function open_rep_contact_block_configure($delta = '') {
       ),
       'settings__searchParams__roles' => array(
         '#type' => 'checkboxes',
-        '#title' => t('A list of office roles to filter by:'),
+        '#title' => t('A list of governmental office roles to filter by.'),
+        '#description' => t('These are international names for governmental offices and therefore are not specific to the US system. They are also determined in relation to the geographical region selected above. For instance, if "country" is selected above, then "House of Representatives" is "legislatorLowerBody" while "Senate" is "legislatorUpperBody." "headOfGovernment" is POTUS. More info at the human-friendly link above.'),
         '#default_value' => isset($orc['settings']['searchParams']['roles']) ? $orc['settings']['searchParams']['roles'] : array(),
         '#options' => drupal_map_assoc(array(
           'deputyHeadOfGovernment',
